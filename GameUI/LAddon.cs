@@ -11,7 +11,23 @@ public static class LAddon
 
     public static unsafe AtkUnitBase* GetAddonById(uint id)
     {
-        var unitManagers = &AtkStage.Instance()->RaptureAtkUnitManager->AtkUnitManager.DepthLayerOneList;
+        // AtkStage.Instance() 是 [StaticAddress(..., isPointer: true)]：只有「特徵碼沒解析到」才會
+        // 擲例外，解析到但遊戲尚未建好 AtkStage 時回傳的是存在該位址的 null 指標；
+        // RaptureAtkUnitManager 又是 AtkStage 上的純指標欄位。兩層都沒判空的話，
+        // 下面的 unitManager->Count 與 Entries 就是對垃圾位址解參考。
+        var stage = AtkStage.Instance();
+        if (stage == null)
+        {
+            return null;
+        }
+
+        var raptureAtkUnitManager = stage->RaptureAtkUnitManager;
+        if (raptureAtkUnitManager == null)
+        {
+            return null;
+        }
+
+        var unitManagers = &raptureAtkUnitManager->AtkUnitManager.DepthLayerOneList;
         for (var i = 0; i < UnitListCount; i++)
         {
             var unitManager = &unitManagers[i];
@@ -49,6 +65,8 @@ public static class LAddon
 
     public static unsafe bool IsAddonReady(AtkUnitBase* addon)
     {
-        return addon->IsVisible && addon->UldManager.LoadedState == AtkLoadState.Loaded;
+        // GetAddonById 與 TryGetAddonByName 兩個入口都會給出 null，這裡是它們最常見的下游；
+        // 判空後 fail-closed 回 false，語意就是「還沒就緒」。
+        return addon != null && addon->IsVisible && addon->UldManager.LoadedState == AtkLoadState.Loaded;
     }
 }
